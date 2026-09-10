@@ -14,9 +14,10 @@ import (
 	"time"
 )
 
-func NewHTTPServer(cfg *config.CalculatorConfig, state *State) *http.Server {
+func NewHTTPServer(cfg *config.CalculatorConfig, state *State, metrics *Metrics) *http.Server {
 	mux := http.NewServeMux()
-	mux.Handle("POST /calc", NewCalcHandler(state))
+	mux.Handle("POST /calc", NewCalcHandler(state, metrics))
+	mux.Handle("GET /metrics", NewMetricsHandler(metrics))
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})

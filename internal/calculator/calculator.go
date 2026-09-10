@@ -33,7 +33,8 @@ func run() error {
 		return err
 	}
 
-	state := NewState(cLib, rustLib)
-	server := NewHTTPServer(cfg, state)
+	metrics := NewMetrics()
+	state := NewState(cLib, rustLib, metrics)
+	server := NewHTTPServer(cfg, state, metrics)
 	return runServer(server, state, interval)
 }

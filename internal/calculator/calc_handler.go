@@ -7,14 +7,17 @@ import (
 )
 
 type CalcHandler struct {
-	state *State
+	state   *State
+	metrics *Metrics
 }
 
-func NewCalcHandler(state *State) *CalcHandler {
-	return &CalcHandler{state: state}
+func NewCalcHandler(state *State, metrics *Metrics) *CalcHandler {
+	return &CalcHandler{state: state, metrics: metrics}
 }
 
 func (h *CalcHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.metrics.recordRequest()
+
 	var rawNum string
 	for _, value := range r.URL.Query()["num"] {
 		if value != "" {

@@ -15,16 +15,6 @@ func NewCalcHandler(state *State) *CalcHandler {
 }
 
 func (h *CalcHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		h.respond(w, http.StatusNotImplemented, []byte("unsupported method"))
-		return
-	}
-
-	if r.URL.Path != "/calc" {
-		h.respond(w, http.StatusNotFound, []byte("not found"))
-		return
-	}
-
 	var rawNum string
 	for _, value := range r.URL.Query()["num"] {
 		if value != "" {

@@ -1,5 +1,3 @@
-//go:build linux || darwin || freebsd || netbsd
-
 package calculator
 
 import (
@@ -13,6 +11,10 @@ import (
 
 type LibLoader struct {
 	cfg *config.CalculatorConfig
+}
+
+func NewLibLoader(cfg *config.CalculatorConfig) *LibLoader {
+	return &LibLoader{cfg: cfg}
 }
 
 type CLibrary struct {
@@ -60,9 +62,9 @@ func loadLibFunction(path, name string) (uintptr, uintptr, error) {
 		slog.Error("failed to load library", "path", path, "error", err)
 		return 0, 0, err
 	}
-	function, err := findNativeSymbol(id, name)
+	function, err := findNativeFunction(id, name)
 	if err != nil {
-		_ = closeNativeLibrary(handle)
+		_ = closeNativeLibrary(id)
 		slog.Error("failed to find function", "path", path, "function", name, "error", err)
 		return 0, 0, err
 	}

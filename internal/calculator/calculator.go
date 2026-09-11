@@ -1,6 +1,7 @@
 package calculator
 
 import (
+	"PythonToGoMigrationTest/internal/calculator/libraries"
 	"PythonToGoMigrationTest/internal/config"
 	"errors"
 	"log/slog"
@@ -26,8 +27,8 @@ func run() error {
 		return errors.New("interval must be positive and fit within time.Duration")
 	}
 
-	loader := NewLibLoader(cfg)
-	cLib, rustLib, err := loader.load()
+	loader := libraries.NewLibLoader(cfg)
+	cLib, rustLib, err := loader.Load()
 
 	if err != nil {
 		return err

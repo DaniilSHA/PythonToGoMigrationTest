@@ -1,6 +1,6 @@
 //go:build linux || darwin || freebsd || netbsd
 
-package calculator
+package libraries
 
 import "github.com/ebitengine/purego"
 

@@ -1,4 +1,4 @@
-package calculator
+package libraries
 
 import "syscall"
 

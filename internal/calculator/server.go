@@ -1,6 +1,7 @@
 package calculator
 
 import (
+	"PythonToGoMigrationTest/internal/calculator/handlers"
 	"PythonToGoMigrationTest/internal/config"
 	"context"
 	"errors"
@@ -16,11 +17,9 @@ import (
 
 func NewHTTPServer(cfg *config.CalculatorConfig, state *State, metrics *Metrics) *http.Server {
 	mux := http.NewServeMux()
-	mux.Handle("POST /calc", NewCalcHandler(state, metrics))
-	mux.Handle("GET /metrics", NewMetricsHandler(metrics))
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("ok"))
-	})
+	mux.Handle("POST /calc", handlers.NewCalcHandler(state, metrics))
+	mux.Handle("GET /metrics", handlers.NewMetricsHandler(metrics))
+	mux.Handle("GET /health", handlers.NewHealthHandler())
 
 	return &http.Server{
 		Addr:    net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)),

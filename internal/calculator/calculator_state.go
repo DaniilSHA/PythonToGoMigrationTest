@@ -1,14 +1,15 @@
 package calculator
 
 import (
+	"PythonToGoMigrationTest/internal/calculator/libraries"
 	"fmt"
 	"sync"
 	"time"
 )
 
 type State struct {
-	cLib     *CLibrary
-	rustLib  *RustLibrary
+	cLib     *libraries.CLibrary
+	rustLib  *libraries.RustLibrary
 	metrics  *Metrics
 	mutex    sync.RWMutex
 	sumValue int64
@@ -21,7 +22,7 @@ type nativeCallResult struct {
 	duration   time.Duration
 }
 
-func NewState(cLib *CLibrary, rustLib *RustLibrary, metrics *Metrics) *State {
+func NewState(cLib *libraries.CLibrary, rustLib *libraries.RustLibrary, metrics *Metrics) *State {
 	return &State{cLib: cLib, rustLib: rustLib, metrics: metrics}
 }
 

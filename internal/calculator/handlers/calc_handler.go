@@ -1,4 +1,4 @@
-package calculator
+package handlers
 
 import (
 	"net/http"
@@ -6,17 +6,25 @@ import (
 	"strings"
 )
 
-type CalcHandler struct {
-	state   *State
-	metrics *Metrics
+type State interface {
+	Add(int64)
 }
 
-func NewCalcHandler(state *State, metrics *Metrics) *CalcHandler {
+type RequestMetrics interface {
+	RecordRequest()
+}
+
+type CalcHandler struct {
+	state   State
+	metrics RequestMetrics
+}
+
+func NewCalcHandler(state State, metrics RequestMetrics) *CalcHandler {
 	return &CalcHandler{state: state, metrics: metrics}
 }
 
 func (h *CalcHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.metrics.recordRequest()
+	h.metrics.RecordRequest()
 
 	var rawNum string
 	for _, value := range r.URL.Query()["num"] {

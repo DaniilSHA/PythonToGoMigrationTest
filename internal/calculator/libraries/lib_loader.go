@@ -1,4 +1,4 @@
-package calculator
+package libraries
 
 import (
 	"errors"
@@ -27,7 +27,7 @@ type RustLibrary struct {
 	Sub func(int64, int64) int64
 }
 
-func (ll LibLoader) load() (*CLibrary, *RustLibrary, error) {
+func (ll LibLoader) Load() (*CLibrary, *RustLibrary, error) {
 	if ll.cfg == nil {
 		err := errors.New("calculator config is nil")
 		slog.Error(err.Error())

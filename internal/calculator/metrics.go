@@ -1,8 +1,10 @@
 package calculator
 
 import (
+	"fmt"
 	"math"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -54,7 +56,7 @@ func NewMetrics() *Metrics {
 	}
 }
 
-func (m *Metrics) recordRequest() {
+func (m *Metrics) RecordRequest() {
 	m.requestsMutex.Lock()
 	defer m.requestsMutex.Unlock()
 
@@ -146,4 +148,21 @@ func durationQuantiles(durations []time.Duration) (float64, float64) {
 	p95 := int(math.Ceil(0.95*float64(len(durations)))) - 1
 	p99 := int(math.Ceil(0.99*float64(len(durations)))) - 1
 	return durations[p95].Seconds(), durations[p99].Seconds()
+}
+
+func (m *Metrics) Prometheus() string {
+	snapshot := m.snapshot()
+	var body strings.Builder
+	body.WriteString("# HELP calculator_http_requests_per_second POST /calc requests in each completed second; seconds_ago=1 is the most recent.\n")
+	body.WriteString("# TYPE calculator_http_requests_per_second gauge\n")
+	for i, count := range snapshot.rps {
+		fmt.Fprintf(&body, "calculator_http_requests_per_second{seconds_ago=\"%d\"} %d\n", i+1, count)
+	}
+	body.WriteString("# HELP calculator_native_call_duration_seconds Exact native call duration quantiles in seconds over the last 60 seconds, excluding state lock wait time.\n")
+	body.WriteString("# TYPE calculator_native_call_duration_seconds gauge\n")
+	fmt.Fprintf(&body, "calculator_native_call_duration_seconds{library=\"%s\",quantile=\"0.95\"} %g\n", cLibraryKey, snapshot.cP95)
+	fmt.Fprintf(&body, "calculator_native_call_duration_seconds{library=\"%s\",quantile=\"0.99\"} %g\n", cLibraryKey, snapshot.cP99)
+	fmt.Fprintf(&body, "calculator_native_call_duration_seconds{library=\"%s\",quantile=\"0.95\"} %g\n", rustLibraryKey, snapshot.rustP95)
+	fmt.Fprintf(&body, "calculator_native_call_duration_seconds{library=\"%s\",quantile=\"0.99\"} %g\n", rustLibraryKey, snapshot.rustP99)
+	return body.String()
 }

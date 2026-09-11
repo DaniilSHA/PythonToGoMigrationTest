@@ -15,12 +15,12 @@ const (
 
 type Metrics struct {
 	mutex    sync.Mutex
-	requests [61]requestBucket
+	requests [61]requestBucket //храним 60 значения за 60 секунд + 1 текущее
 	calls    map[string]*callWindow
 }
 
 type requestBucket struct {
-	second int64
+	second int64 //метка времени
 	count  uint64
 }
 
@@ -60,14 +60,13 @@ func (m *Metrics) recordRequest() {
 		*bucket = requestBucket{second: second}
 	}
 	bucket.count++
-	m.expireCalls(now)
 }
 
-func (m *Metrics) recordCall(library string, finishedAt time.Time, duration time.Duration) {
+func (m *Metrics) recordCall(libraryKey string, finishedAt time.Time, duration time.Duration) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	window := m.calls[library]
+	window := m.calls[libraryKey]
 	window.samples = append(window.samples, callSample{finishedAt: finishedAt, duration: duration})
 	m.expireCalls(time.Now())
 }
@@ -83,14 +82,14 @@ func (w *callWindow) expire(cutoff time.Time) {
 	for w.head < len(w.samples) && w.samples[w.head].finishedAt.Before(cutoff) {
 		w.samples[w.head] = callSample{}
 		w.head++
-	}
+	} // убираем устаревшие записи
 	if w.head == len(w.samples) {
 		w.samples = nil
-		w.head = 0
+		w.head = 0 // если все записи устарели обнуляем slice
 	} else if w.head >= len(w.samples)/2 && w.head > 0 {
 		w.samples = slices.Clone(w.samples[w.head:])
 		w.head = 0
-	}
+	} // если устарели более половины записей обновляем slice
 }
 
 func (w *callWindow) durations() []time.Duration {
@@ -109,7 +108,7 @@ func (m *Metrics) snapshot() metricsSnapshot {
 	var snapshot metricsSnapshot
 	for i := range snapshot.rps {
 		second := now.Unix() - int64(i+1)
-		bucket := m.requests[second%int64(len(m.requests))]
+		bucket := m.requests[second%int64(len(m.requests))] //берем за последнии i секунд значение
 		if bucket.second == second {
 			snapshot.rps[i] = bucket.count
 		}
@@ -123,6 +122,8 @@ func (m *Metrics) snapshot() metricsSnapshot {
 	return snapshot
 }
 
+// используем метод nearest rank для расчетов перцентилей
+// показывает max время за которое завершились N% вызовов функций
 func durationQuantiles(durations []time.Duration) (float64, float64) {
 	if len(durations) == 0 {
 		return math.NaN(), math.NaN()

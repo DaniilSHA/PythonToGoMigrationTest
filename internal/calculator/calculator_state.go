@@ -15,24 +15,40 @@ type State struct {
 	subValue int64
 }
 
+type nativeCallResult struct {
+	value      int64
+	finishedAt time.Time
+	duration   time.Duration
+}
+
 func NewState(cLib *CLibrary, rustLib *RustLibrary, metrics *Metrics) *State {
 	return &State{cLib: cLib, rustLib: rustLib, metrics: metrics}
 }
 
 func (s *State) Add(num int64) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+	cResultCh := make(chan nativeCallResult, 1)
+	go func() {
+		startedAt := time.Now()
+		value := s.cLib.Add(0, num)
+		finishedAt := time.Now()
+		cResultCh <- nativeCallResult{
+			value:      value,
+			finishedAt: finishedAt,
+			duration:   finishedAt.Sub(startedAt),
+		}
+	}()
 
 	startedAt := time.Now()
-	sumValue := s.cLib.Add(s.sumValue, num)
+	subDelta := s.rustLib.Sub(0, num)
 	finishedAt := time.Now()
-	s.sumValue = sumValue
-	s.metrics.recordCall(cLibraryKey, finishedAt, finishedAt.Sub(startedAt))
+	cResult := <-cResultCh
 
-	startedAt = time.Now()
-	subValue := s.rustLib.Sub(s.subValue, num)
-	finishedAt = time.Now()
-	s.subValue = subValue
+	s.mutex.Lock()
+	s.sumValue += cResult.value
+	s.subValue += subDelta
+	s.mutex.Unlock()
+
+	s.metrics.recordCall(cLibraryKey, cResult.finishedAt, cResult.duration)
 	s.metrics.recordCall(rustLibraryKey, finishedAt, finishedAt.Sub(startedAt))
 }
 

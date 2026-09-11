@@ -14,9 +14,9 @@ const (
 )
 
 type Metrics struct {
-	mutex    sync.Mutex
-	requests [61]requestBucket //храним 60 значения за 60 секунд + 1 текущее
-	calls    map[string]*callWindow
+	requestsMutex sync.Mutex
+	requests      [61]requestBucket //храним 60 значения за 60 секунд + 1 текущее
+	calls         map[string]*callWindow
 }
 
 type requestBucket struct {
@@ -30,8 +30,13 @@ type callSample struct {
 }
 
 type callWindow struct {
+	buckets [61]callBucket
+}
+
+type callBucket struct {
+	mutex   sync.Mutex
+	second  int64
 	samples []callSample
-	head    int
 }
 
 type metricsSnapshot struct {
@@ -50,8 +55,8 @@ func NewMetrics() *Metrics {
 }
 
 func (m *Metrics) recordRequest() {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.requestsMutex.Lock()
+	defer m.requestsMutex.Unlock()
 
 	now := time.Now()
 	second := now.Unix()
@@ -63,47 +68,56 @@ func (m *Metrics) recordRequest() {
 }
 
 func (m *Metrics) recordCall(libraryKey string, finishedAt time.Time, duration time.Duration) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
 	window := m.calls[libraryKey]
-	window.samples = append(window.samples, callSample{finishedAt: finishedAt, duration: duration})
-	m.expireCalls(time.Now())
-}
+	second := finishedAt.Unix()
+	bucket := &window.buckets[second%int64(len(window.buckets))]
+	bucket.mutex.Lock()
+	defer bucket.mutex.Unlock()
 
-func (m *Metrics) expireCalls(now time.Time) {
-	cutoff := now.Add(-metricsWindow)
-	for _, window := range m.calls {
-		window.expire(cutoff)
+	if finishedAt.Before(time.Now().Add(-metricsWindow)) || second < bucket.second {
+		return
 	}
+	if bucket.second != second {
+		bucket.second = second
+		bucket.samples = nil
+	}
+	bucket.samples = append(bucket.samples, callSample{finishedAt: finishedAt, duration: duration})
 }
 
-func (w *callWindow) expire(cutoff time.Time) {
-	for w.head < len(w.samples) && w.samples[w.head].finishedAt.Before(cutoff) {
-		w.samples[w.head] = callSample{}
-		w.head++
-	} // убираем устаревшие записи
-	if w.head == len(w.samples) {
-		w.samples = nil
-		w.head = 0 // если все записи устарели обнуляем slice
-	} else if w.head >= len(w.samples)/2 && w.head > 0 {
-		w.samples = slices.Clone(w.samples[w.head:])
-		w.head = 0
-	} // если устарели более половины записей обновляем slice
+func (w *callWindow) durations(now time.Time) []time.Duration {
+	cutoff := now.Add(-metricsWindow)
+	var durations []time.Duration
+	for i := range w.buckets {
+		values := w.buckets[i].durations(cutoff, now)
+		durations = append(durations, values...)
+	}
+	return durations
 }
 
-func (w *callWindow) durations() []time.Duration {
-	durations := make([]time.Duration, len(w.samples)-w.head)
-	for i, sample := range w.samples[w.head:] {
-		durations[i] = sample.duration
+func (b *callBucket) durations(cutoff, now time.Time) []time.Duration {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
+	if b.second < cutoff.Unix() {
+		b.samples = nil
+		return nil
+	}
+	if b.second > now.Unix() {
+		return nil
+	}
+
+	durations := make([]time.Duration, 0, len(b.samples))
+	for _, sample := range b.samples {
+		if !sample.finishedAt.Before(cutoff) && !sample.finishedAt.After(now) {
+			durations = append(durations, sample.duration)
+		}
 	}
 	return durations
 }
 
 func (m *Metrics) snapshot() metricsSnapshot {
-	m.mutex.Lock()
+	m.requestsMutex.Lock()
 	now := time.Now()
-	m.expireCalls(now)
 
 	var snapshot metricsSnapshot
 	for i := range snapshot.rps {
@@ -113,9 +127,9 @@ func (m *Metrics) snapshot() metricsSnapshot {
 			snapshot.rps[i] = bucket.count
 		}
 	}
-	cDurations := m.calls[cLibraryKey].durations()
-	rustDurations := m.calls[rustLibraryKey].durations()
-	m.mutex.Unlock()
+	m.requestsMutex.Unlock()
+	cDurations := m.calls[cLibraryKey].durations(now)
+	rustDurations := m.calls[rustLibraryKey].durations(now)
 
 	snapshot.cP95, snapshot.cP99 = durationQuantiles(cDurations)
 	snapshot.rustP95, snapshot.rustP99 = durationQuantiles(rustDurations)
